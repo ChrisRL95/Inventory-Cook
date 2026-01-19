@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, ChefHat, Trash2, Clock, BookOpen, X, Trophy, Share2 } from 'lucide-react';
+import { Sparkles, ChefHat, Trash2, Clock, BookOpen, X, Trophy, Share2, Sun, Moon, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ingredientes, receitas } from './data';
 
@@ -12,6 +12,10 @@ export default function Home() {
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [xp, setXp] = useState(0);
   const [unlockedRecipes, setUnlockedRecipes] = useState([]);
+  
+  // Novos Estados
+  const [isNight, setIsNight] = useState(true);
+  const [isShaking, setIsShaking] = useState(false); // Para animação de erro
 
   // --- AUDIO SYSTEM ---
   const playSound = (type) => {
@@ -19,11 +23,19 @@ export default function Home() {
       pop: '/sounds/pop.mp3',
       craft: '/sounds/craft.mp3',
       trash: '/sounds/trash.mp3',
+      fail: '/sounds/trash.mp3', // Reutilizando som ou adicione um fail.mp3
     };
     const audio = new Audio(sounds[type]);
     audio.volume = 0.5;
     audio.play().catch(() => {});
   };
+
+  // --- CLIMA DINÂMICO (Time Check) ---
+  useEffect(() => {
+    const hour = new Date().getHours();
+    // Considera noite se for antes das 6h ou depois das 18h
+    setIsNight(hour < 6 || hour >= 18);
+  }, []);
 
   // --- PERSISTÊNCIA ---
   useEffect(() => {
@@ -63,12 +75,11 @@ export default function Home() {
     e.preventDefault();
     const source = e.dataTransfer.getData('source');
     
-    // Lógica para remover do inventário ao arrastar de volta para a loja
     if (source === 'inventory') {
       const itemData = JSON.parse(e.dataTransfer.getData('item'));
       const indexToRemove = inventory.findIndex(i => i.id === itemData.id);
       if (indexToRemove > -1) {
-        playSound('pop'); // Feedback sonoro ao remover
+        playSound('pop');
         const newInventory = [...inventory];
         newInventory.splice(indexToRemove, 1);
         setInventory(newInventory);
@@ -79,8 +90,14 @@ export default function Home() {
 
   const allowDrop = (e) => e.preventDefault();
 
-  // --- LÓGICA ---
+  // --- LÓGICA DE JOGO ---
   const checkRecipes = (currentInventory) => {
+    // Se tiver gororoba, não checa receita
+    if (currentInventory.some(i => i.id.startsWith('trash'))) {
+        setCraftResult(null);
+        return;
+    }
+
     const invIds = currentInventory.map(i => i.id);
     const found = receitas.find(recipe => {
       const hasAllIngredients = recipe.ingredients.every(ing => invIds.includes(ing));
@@ -90,14 +107,32 @@ export default function Home() {
     setCraftResult(found || null);
   };
 
-  const handleCraftComplete = () => {
+  // Função Principal: Misturar ou Craftar
+  const handleAction = () => {
     if (craftResult) {
-      playSound('craft');
-      setXp(prev => prev + craftResult.xp);
-      if (!unlockedRecipes.includes(craftResult.name)) {
-        setUnlockedRecipes(prev => [...prev, craftResult.name]);
-      }
-      setSelectedRecipe(craftResult);
+        // SUCESSO: Craftar
+        playSound('craft');
+        setXp(prev => prev + craftResult.xp);
+        if (!unlockedRecipes.includes(craftResult.name)) {
+            setUnlockedRecipes(prev => [...prev, craftResult.name]);
+        }
+        setSelectedRecipe(craftResult);
+    } else {
+        // FALHA: Virar Gororoba
+        setIsShaking(true); // Começa a tremer
+        playSound('fail');
+        
+        // Aguarda animação terminar (500ms)
+        setTimeout(() => {
+            setIsShaking(false);
+            setInventory([{ 
+                id: `trash-${Date.now()}`, 
+                icon: '🤢', 
+                name: 'Gororoba', 
+                rarity: 'common' 
+            }]);
+            setCraftResult(null);
+        }, 500);
     }
   };
 
@@ -107,46 +142,73 @@ export default function Home() {
     alert('Copiado para a área de transferência!');
   };
 
+  // --- PALETA DE CORES DINÂMICA ---
+  const theme = isNight ? {
+    bg: 'bg-rpg-bg',
+    card: 'bg-slate-800/50',
+    accent: 'text-rpg-accent',
+    border: 'border-slate-700/50',
+    itemBg: 'bg-slate-700/90',
+    pantryBg: 'bg-slate-900',
+    gradient: 'from-rpg-accent to-blue-500'
+  } : {
+    bg: 'bg-orange-50', // Dia: Fundo claro quente
+    card: 'bg-white/60',
+    accent: 'text-orange-600',
+    border: 'border-orange-200',
+    itemBg: 'bg-white',
+    pantryBg: 'bg-white',
+    gradient: 'from-orange-400 to-yellow-300'
+  };
+
   return (
-    <main className="min-h-screen bg-rpg-bg text-white selection:bg-rpg-accent selection:text-white py-12 px-4 relative overflow-x-hidden">
+    <main className={`min-h-screen ${theme.bg} transition-colors duration-1000 text-slate-800 dark:text-white selection:bg-rpg-accent selection:text-white py-12 px-4 relative overflow-x-hidden`}>
       
       {/* Background Decoration */}
-      <div className="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-rpg-accent to-blue-500 shadow-[0_0_40px_rgba(139,92,246,0.6)] z-50"></div>
+      <div className={`fixed top-0 left-0 w-full h-1 bg-gradient-to-r ${theme.gradient} shadow-[0_0_40px_rgba(139,92,246,0.6)] z-50`}></div>
       
+      {/* Botão de Toggle Manual (Debug/Diversão) */}
+      <button 
+        onClick={() => setIsNight(!isNight)}
+        className="fixed top-4 right-4 z-50 p-2 rounded-full bg-slate-800/20 backdrop-blur-md hover:bg-slate-800/40 transition-all border border-slate-500/20"
+      >
+        {isNight ? <Moon size={20} className="text-purple-300" /> : <Sun size={20} className="text-orange-500" />}
+      </button>
+
       {/* CONTAINER CENTRALIZADO */}
       <div className="max-w-2xl mx-auto flex flex-col gap-12">
 
         {/* --- BLOCO 1: HEADER & STATS --- */}
         <section className="text-center space-y-6">
           <div className="inline-block relative">
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight flex items-center justify-center gap-3 drop-shadow-xl">
-              <ChefHat size={48} className="text-rpg-accent animate-bounce-slow" /> 
+            <h1 className={`text-4xl md:text-5xl font-black tracking-tight flex items-center justify-center gap-3 drop-shadow-xl ${isNight ? 'text-white' : 'text-slate-800'}`}>
+              <ChefHat size={48} className={`${theme.accent} animate-bounce-slow`} /> 
               Inventory Cook
             </h1>
             <span className="absolute -top-2 -right-6 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full rotate-12">
-              v1.0
+              BETA
             </span>
           </div>
           
-          <div className="bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 shadow-lg max-w-md mx-auto">
+          <div className={`${theme.card} backdrop-blur-md p-4 rounded-2xl border ${theme.border} shadow-lg max-w-md mx-auto transition-colors duration-500`}>
             <div className="flex justify-between items-end mb-2 px-2">
               <div className="flex flex-col text-left">
-                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Nível de Chef</span>
-                <span className="text-xl font-bold text-white flex items-center gap-2">
+                <span className={`text-xs uppercase tracking-wider font-semibold ${isNight ? 'text-slate-400' : 'text-slate-500'}`}>Nível de Chef</span>
+                <span className={`text-xl font-bold flex items-center gap-2 ${isNight ? 'text-white' : 'text-slate-800'}`}>
                   <Trophy size={18} className="text-yellow-500" /> 
                   {Math.floor(xp / 100) + 1}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-2xl font-black text-rpg-accent">{xp}</span>
-                <span className="text-[10px] text-slate-500 block -mt-1 font-bold">XP TOTAL</span>
+                <span className={`text-2xl font-black ${theme.accent}`}>{xp}</span>
+                <span className={`text-[10px] block -mt-1 font-bold ${isNight ? 'text-slate-500' : 'text-slate-400'}`}>XP TOTAL</span>
               </div>
             </div>
             
             {/* Barra de XP */}
-            <div className="w-full h-4 bg-slate-900 rounded-full overflow-hidden border border-slate-700 relative">
+            <div className={`w-full h-4 rounded-full overflow-hidden border ${theme.border} relative ${isNight ? 'bg-slate-900' : 'bg-slate-200'}`}>
               <motion.div 
-                className="h-full bg-gradient-to-r from-rpg-accent to-purple-400 relative"
+                className={`h-full bg-gradient-to-r ${theme.gradient} relative`}
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min((xp % 1000) / 10, 100)}%` }}
                 transition={{ type: "spring", stiffness: 50 }}
@@ -160,16 +222,16 @@ export default function Home() {
         {/* --- BLOCO 2: O CALDEIRÃO --- */}
         <section className="relative z-10">
           <div className="text-center mb-4">
-             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-2">
+             <h2 className={`text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${isNight ? 'text-slate-400' : 'text-slate-500'}`}>
                <Sparkles size={14} /> Área de Preparo
              </h2>
           </div>
 
           <div 
             className={`
-              relative w-full min-h-[200px] rounded-3xl border-4 border-dashed transition-all duration-500 
+              relative w-full min-h-[220px] rounded-3xl border-4 border-dashed transition-all duration-500 
               flex flex-wrap content-center justify-center gap-6 p-8
-              ${inventory.length > 0 ? 'border-rpg-accent bg-slate-800/60 shadow-[0_0_50px_rgba(139,92,246,0.15)]' : 'border-slate-700 bg-slate-900/40'}
+              ${inventory.length > 0 ? `border-current ${isNight ? 'text-purple-500 bg-slate-800/60' : 'text-orange-400 bg-orange-100/50'} shadow-lg` : `border-slate-500/30 ${isNight ? 'bg-slate-900/40' : 'bg-slate-200/40'}`}
             `}
             onDrop={handleDropOnInventory}
             onDragOver={allowDrop}
@@ -181,35 +243,37 @@ export default function Home() {
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-30"
                 >
-                  <ChefHat size={60} className="text-slate-500 mb-2" />
-                  <span className="text-slate-500 text-sm font-medium">Arraste os ingredientes aqui</span>
+                  <ChefHat size={60} className={isNight ? 'text-slate-500' : 'text-slate-400'} />
+                  <span className={`text-sm font-medium mt-2 ${isNight ? 'text-slate-500' : 'text-slate-500'}`}>Arraste os ingredientes aqui</span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Itens */}
+            {/* Itens no Caldeirão */}
             <AnimatePresence mode='popLayout'>
               {inventory.map((item) => (
                 <motion.div 
                   key={`${item.id}`}
                   layoutId={item.id}
+                  // Animação de Shake se estiver errado
+                  animate={isShaking ? { x: [-5, 5, -5, 5, 0], rotate: [0, -10, 10, -5, 5, 0] } : { scale: 1, rotate: Math.random() * 10 - 5 }}
+                  transition={isShaking ? { duration: 0.4 } : { type: "spring" }}
+                  
                   initial={{ scale: 0, rotate: Math.random() * 360 }}
-                  animate={{ scale: 1, rotate: Math.random() * 10 - 5 }}
                   exit={{ scale: 0, opacity: 0 }}
                   whileHover={{ scale: 1.2, rotate: 0, zIndex: 20 }}
-                  // CORREÇÃO: Removemos 'drag' e 'dragConstraints' do Framer para evitar conflito
-                  draggable={true} // Forçamos o HTML5 Drag
+                  draggable={true}
                   onDragStart={(e) => handleDragStart(e, item, 'inventory')}
-                  className="w-20 h-20 bg-slate-700/90 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-2xl border border-slate-500/50 cursor-grab active:cursor-grabbing hover:border-white/50 transition-colors"
+                  className={`w-20 h-20 ${theme.itemBg} backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-xl border border-slate-500/20 cursor-grab active:cursor-grabbing`}
                 >
                   {item.icon}
                 </motion.div>
               ))}
             </AnimatePresence>
 
-            {/* Botão Flutuante de Craft */}
+            {/* BOTÃO DE AÇÃO (MISTURAR OU CRAFTAR) */}
             <AnimatePresence>
-              {craftResult && (
+              {inventory.length > 0 && (
                 <motion.div className="absolute -bottom-6 left-0 right-0 flex justify-center z-30">
                   <motion.button 
                     initial={{ scale: 0, y: 20 }}
@@ -217,11 +281,26 @@ export default function Home() {
                     exit={{ scale: 0, y: 20 }}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={handleCraftComplete}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-full font-black flex items-center gap-3 shadow-[0_10px_30px_rgba(34,197,94,0.4)] border-4 border-rpg-bg"
+                    onClick={handleAction}
+                    className={`
+                      px-8 py-4 rounded-full font-black flex items-center gap-3 border-4 transition-all
+                      ${craftResult 
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white border-white/20 shadow-[0_10px_30px_rgba(34,197,94,0.4)]' 
+                        : 'bg-gradient-to-r from-orange-500 to-red-500 text-white border-white/20 shadow-[0_10px_30px_rgba(249,115,22,0.4)]'
+                      }
+                    `}
                   >
-                    <Sparkles size={24} className="animate-spin-slow" /> 
-                    CRAFTAR {craftResult.name.toUpperCase()}
+                    {craftResult ? (
+                        <>
+                            <Sparkles size={24} className="animate-spin-slow" /> 
+                            CRAFTAR!
+                        </>
+                    ) : (
+                        <>
+                            <RotateCw size={24} className={isShaking ? "animate-spin" : ""} /> 
+                            MISTURAR
+                        </>
+                    )}
                   </motion.button>
                 </motion.div>
               )}
@@ -229,12 +308,12 @@ export default function Home() {
           </div>
 
           {/* Botão Limpar */}
-          <div className="flex justify-center mt-8 min-h-[40px]">
+          <div className="flex justify-center mt-10 min-h-[40px]">
             {inventory.length > 0 && (
               <motion.button 
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 onClick={() => { playSound('trash'); setInventory([]); setCraftResult(null); }}
-                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-2 transition-colors bg-red-950/30 px-4 py-2 rounded-full border border-red-900/50 hover:bg-red-900/50"
+                className="text-xs text-red-400 hover:text-red-500 flex items-center gap-2 transition-colors px-4 py-2 rounded-full border border-red-500/20 hover:bg-red-500/10"
               >
                 <Trash2 size={14} /> Esvaziar Caldeirão
               </motion.button>
@@ -243,9 +322,9 @@ export default function Home() {
         </section>
 
         {/* --- BLOCO 3: A GELADEIRA (GRID) --- */}
-        <section className="bg-slate-900 rounded-[2.5rem] p-8 border border-slate-800 shadow-2xl relative">
+        <section className={`${theme.pantryBg} rounded-[2.5rem] p-8 border ${theme.border} shadow-2xl relative transition-colors duration-500`}>
           {/* Label da Geladeira */}
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-slate-800 text-slate-200 px-6 py-2 rounded-full border border-slate-700 shadow-lg flex items-center gap-2">
+          <div className={`absolute -top-4 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full border shadow-lg flex items-center gap-2 ${isNight ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-orange-100 text-slate-600'}`}>
              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
              <span className="text-xs font-bold uppercase tracking-widest">Despensa</span>
           </div>
@@ -265,18 +344,22 @@ export default function Home() {
                 onDragStart={(e) => handleDragStart(e, item, 'pantry')}
                 className={`
                   aspect-square rounded-2xl flex flex-col items-center justify-center gap-2 cursor-grab active:cursor-grabbing
-                  bg-slate-800 border-2 border-slate-700/50 transition-all group
-                  hover:bg-slate-700 hover:border-slate-500 hover:shadow-lg
+                  border-2 transition-all group
+                  ${isNight 
+                    ? 'bg-slate-800 border-slate-700/50 hover:bg-slate-700 hover:border-slate-500' 
+                    : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-orange-300'
+                  }
                   ${item.rarity === 'rare' ? 'border-purple-500/30 bg-purple-900/10' : ''}
                   ${item.rarity === 'legendary' ? 'border-yellow-500/30 bg-yellow-900/10' : ''}
                 `}
               >
-                <span className="text-3xl sm:text-4xl drop-shadow-md filter grayscale-[0.3] group-hover:grayscale-0 transition-all duration-300">
+                <span className="text-3xl sm:text-4xl drop-shadow-md filter grayscale-[0.2] group-hover:grayscale-0 transition-all duration-300">
                   {item.icon}
                 </span>
                 <span className={`text-[10px] sm:text-xs font-bold uppercase text-center tracking-tight leading-none ${
-                  item.rarity === 'legendary' ? 'text-yellow-500' : 
-                  item.rarity === 'rare' ? 'text-purple-400' : 'text-slate-500 group-hover:text-slate-300'
+                   isNight 
+                   ? (item.rarity === 'legendary' ? 'text-yellow-500' : item.rarity === 'rare' ? 'text-purple-400' : 'text-slate-500 group-hover:text-slate-300')
+                   : (item.rarity === 'legendary' ? 'text-yellow-600' : item.rarity === 'rare' ? 'text-purple-600' : 'text-slate-400 group-hover:text-slate-600')
                 }`}>
                   {item.name}
                 </span>
@@ -284,10 +367,9 @@ export default function Home() {
             ))}
           </div>
         </section>
-
       </div>
 
-      {/* --- MODAL (OVERLAY) --- */}
+      {/* --- MODAL (MANTIDO) --- */}
       <AnimatePresence>
         {selectedRecipe && (
           <motion.div 
@@ -302,7 +384,6 @@ export default function Home() {
               className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl p-6 md:p-8 relative shadow-2xl overflow-hidden" 
               onClick={e => e.stopPropagation()}
             >
-              {/* Conteúdo do Modal igual ao anterior... */}
                <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-green-500/10 to-transparent pointer-events-none"></div>
 
                 <button 
