@@ -2,17 +2,16 @@
 
 import { useState } from 'react';
 import { Sparkles, ChefHat, Trash2, Clock, BookOpen, X } from 'lucide-react';
-// Aqui importamos nosso "Banco de Dados" separado
+// Importando o novo banco de dados
 import { ingredientes, receitas } from './data';
 
 export default function Home() {
   const [inventory, setInventory] = useState([]);
-  // Carrega os ingredientes do arquivo data.js
   const [pantry] = useState(ingredientes);
   const [craftResult, setCraftResult] = useState(null);
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [selectedRecipe, setSelectedRecipe] = useState(null); // Estado para o Modal
 
-  // --- LÓGICA DE DRAG AND DROP ---
+  // --- DRAG AND DROP ---
   const handleDragStart = (e, item, source) => {
     e.dataTransfer.setData('item', JSON.stringify(item));
     e.dataTransfer.setData('source', source);
@@ -23,13 +22,11 @@ export default function Home() {
     const itemData = JSON.parse(e.dataTransfer.getData('item'));
     const source = e.dataTransfer.getData('source');
 
-    // Impede duplicatas no inventário, mas permite mover da loja para inventário
     if (source === 'inventory') return;
     if (inventory.length >= 4) return;
 
-    // Verifica se o item já está no inventário (evita duplicar o mesmo ID)
-    const alreadyExists = inventory.some(i => i.id === itemData.id);
-    if (alreadyExists) return;
+    // Evita duplicatas exatas se desejar (opcional)
+    if (inventory.some(i => i.id === itemData.id)) return;
 
     const newInventory = [...inventory, itemData];
     setInventory(newInventory);
@@ -55,14 +52,17 @@ export default function Home() {
 
   const allowDrop = (e) => e.preventDefault();
 
-  // --- SISTEMA DE CRAFTING ---
+  // --- LÓGICA DE CRAFTING ---
   const checkRecipes = (currentInventory) => {
     const invIds = currentInventory.map(i => i.id);
     
-    // Procura no arquivo data.js se existe match
+    // Busca no arquivo data.js
     const found = receitas.find(recipe => {
+      // Verifica se tem TODOS os ingredientes necessários
       const hasAllIngredients = recipe.ingredients.every(ing => invIds.includes(ing));
+      // Verifica se não tem ingredientes sobrando (Match Exato)
       const isExactMatch = recipe.ingredients.length === invIds.length;
+      
       return hasAllIngredients && isExactMatch;
     });
 
@@ -72,13 +72,6 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-rpg-bg text-white font-mono relative">
       
-      {/* AVISO MOBILE */}
-      <div className="md:hidden bg-yellow-500/20 text-yellow-200 p-4 rounded-lg mb-6 text-center text-sm border border-yellow-500/50">
-        ⚠️ <strong>Modo Mobile Detectado</strong><br/>
-        O sistema de crafting requer mouse e teclado.<br/>
-        Abra no PC para a experiência completa!
-      </div>
-
       {/* HEADER */}
       <header className="mb-8 text-center">
         <h1 className="text-4xl font-bold flex items-center justify-center gap-2">
@@ -111,7 +104,7 @@ export default function Home() {
           </div>
         ))}
 
-        {/* BOTÃO DE RESULTADO (CRAFTADO) */}
+        {/* BOTÃO DE RESULTADO (ABRE O MODAL) */}
         {craftResult && (
           <button 
             onClick={() => setSelectedRecipe(craftResult)}
@@ -170,12 +163,18 @@ export default function Home() {
         </div>
       </div>
 
-      {/* --- MODAL DE DETALHES DA RECEITA --- */}
+      {/* --- MODAL (POPUP) --- */}
       {selectedRecipe && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedRecipe(null)}>
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 relative shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+          onClick={() => setSelectedRecipe(null)}
+        >
+          <div 
+            className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 relative shadow-2xl animate-in fade-in zoom-in duration-300" 
+            onClick={e => e.stopPropagation()}
+          >
             
-            {/* Botão Fechar */}
+            {/* Fechar */}
             <button 
               onClick={() => setSelectedRecipe(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-white"
@@ -183,7 +182,7 @@ export default function Home() {
               <X size={24} />
             </button>
 
-            {/* Cabeçalho do Modal */}
+            {/* Título */}
             <div className="text-center mb-6">
               <span className="inline-block bg-green-500/20 text-green-400 text-xs px-3 py-1 rounded-full mb-2 uppercase tracking-wider">
                 Receita Desbloqueada
@@ -204,10 +203,10 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Passo a Passo */}
+            {/* Passos */}
             <div className="space-y-4">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-                <BookOpen size={20} className="text-rpg-accent" /> Modo de Preparo
+                <BookOpen size={20} className="text-rpg-accent" /> Preparo
               </h3>
               <ul className="space-y-3">
                 {selectedRecipe.steps.map((step, idx) => (
@@ -221,12 +220,12 @@ export default function Home() {
               </ul>
             </div>
 
-            {/* Botão de Ação */}
+            {/* Botão Fechar Modal */}
             <button 
               onClick={() => setSelectedRecipe(null)}
               className="w-full mt-8 bg-rpg-accent hover:bg-violet-500 text-white font-bold py-3 rounded-xl transition-colors"
             >
-              Equipar na Cozinha (Fechar)
+              Equipar (Fechar)
             </button>
 
           </div>
