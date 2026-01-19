@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, ChefHat, Trash2, Clock, BookOpen, X, Trophy, Share2, Sun, Moon, RotateCw } from 'lucide-react';
+import { Sparkles, ChefHat, Trash2, Clock, BookOpen, X, Trophy, Share2, Sun, Moon, RotateCw, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ingredientes, receitas } from './data';
 
@@ -13,9 +13,13 @@ export default function Home() {
   const [xp, setXp] = useState(0);
   const [unlockedRecipes, setUnlockedRecipes] = useState([]);
   
-  // Novos Estados
-  const [isNight, setIsNight] = useState(true);
-  const [isShaking, setIsShaking] = useState(false); // Para animação de erro
+  // Estados Visuais
+  const [isNight, setIsNight] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+  
+  // Estados da Nova Mecânica (Sinergia e Dicas)
+  const [compatibleIngredients, setCompatibleIngredients] = useState([]);
+  const [hintMessage, setHintMessage] = useState('');
 
   // --- AUDIO SYSTEM ---
   const playSound = (type) => {
@@ -23,17 +27,16 @@ export default function Home() {
       pop: '/sounds/pop.mp3',
       craft: '/sounds/craft.mp3',
       trash: '/sounds/trash.mp3',
-      fail: '/sounds/trash.mp3', // Reutilizando som ou adicione um fail.mp3
+      fail: '/sounds/trash.mp3',
     };
     const audio = new Audio(sounds[type]);
     audio.volume = 0.5;
     audio.play().catch(() => {});
   };
 
-  // --- CLIMA DINÂMICO (Time Check) ---
+  // --- CLIMA ---
   useEffect(() => {
     const hour = new Date().getHours();
-    // Considera noite se for antes das 6h ou depois das 18h
     setIsNight(hour < 6 || hour >= 18);
   }, []);
 
@@ -51,6 +54,51 @@ export default function Home() {
     localStorage.setItem('rpg-cook-save', JSON.stringify({ xp, unlocked: unlockedRecipes }));
   }, [xp, unlockedRecipes]);
 
+  // --- ENGINE DE SINERGIA E DICAS (O Cérebro da V3.2) ---
+  useEffect(() => {
+    if (inventory.length === 0) {
+      setCompatibleIngredients([]);
+      setHintMessage('');
+      return;
+    }
+
+    const invIds = inventory.map(i => i.id);
+
+    // 1. Encontrar receitas possíveis com os itens atuais
+    const possibleRecipes = receitas.filter(recipe => 
+      invIds.every(id => recipe.ingredients.includes(id))
+    );
+
+    // 2. Gerar Dica (Cheirinho)
+    if (possibleRecipes.length === 0) {
+      setHintMessage('O cheiro não está nada bom... (Combinação Inválida)');
+    } else {
+      // Tenta adivinhar a categoria baseada nos ingredientes
+      const isSweet = inventory.some(i => ['sugar', 'chocolate', 'milk'].includes(i.id));
+      const isBakery = inventory.some(i => ['flour', 'egg', 'yeast'].includes(i.id));
+      const isSalty = inventory.some(i => ['meat', 'cheese', 'tomato', 'potato'].includes(i.id));
+
+      if (isSweet) setHintMessage('Hmm... cheirinho de doce no ar...');
+      else if (isBakery) setHintMessage('Cheiro de massa fresca...');
+      else if (isSalty) setHintMessage('Cheiro de comida caseira...');
+      else setHintMessage('Misturando sabores...');
+    }
+
+    // 3. Destacar Ingredientes (Sinergia)
+    // Pega todos os ingredientes que faltam nas receitas possíveis
+    const nextIngredients = new Set();
+    possibleRecipes.forEach(recipe => {
+      recipe.ingredients.forEach(ing => {
+        if (!invIds.includes(ing)) {
+          nextIngredients.add(ing);
+        }
+      });
+    });
+    setCompatibleIngredients(Array.from(nextIngredients));
+
+  }, [inventory]);
+
+
   // --- DRAG AND DROP ---
   const handleDragStart = (e, item, source) => {
     e.dataTransfer.setData('item', JSON.stringify(item));
@@ -60,9 +108,6 @@ export default function Home() {
   const handleDropOnInventory = (e) => {
     e.preventDefault();
     const itemData = JSON.parse(e.dataTransfer.getData('item'));
-    const source = e.dataTransfer.getData('source');
-
-    if (source === 'inventory') return;
     if (inventory.some(i => i.id === itemData.id)) return;
 
     playSound('pop');
@@ -74,7 +119,6 @@ export default function Home() {
   const handleDropOnPantry = (e) => {
     e.preventDefault();
     const source = e.dataTransfer.getData('source');
-    
     if (source === 'inventory') {
       const itemData = JSON.parse(e.dataTransfer.getData('item'));
       const indexToRemove = inventory.findIndex(i => i.id === itemData.id);
@@ -90,14 +134,12 @@ export default function Home() {
 
   const allowDrop = (e) => e.preventDefault();
 
-  // --- LÓGICA DE JOGO ---
+  // --- CHECAGEM FINAL ---
   const checkRecipes = (currentInventory) => {
-    // Se tiver gororoba, não checa receita
     if (currentInventory.some(i => i.id.startsWith('trash'))) {
         setCraftResult(null);
         return;
     }
-
     const invIds = currentInventory.map(i => i.id);
     const found = receitas.find(recipe => {
       const hasAllIngredients = recipe.ingredients.every(ing => invIds.includes(ing));
@@ -107,10 +149,8 @@ export default function Home() {
     setCraftResult(found || null);
   };
 
-  // Função Principal: Misturar ou Craftar
   const handleAction = () => {
     if (craftResult) {
-        // SUCESSO: Craftar
         playSound('craft');
         setXp(prev => prev + craftResult.xp);
         if (!unlockedRecipes.includes(craftResult.name)) {
@@ -118,19 +158,11 @@ export default function Home() {
         }
         setSelectedRecipe(craftResult);
     } else {
-        // FALHA: Virar Gororoba
-        setIsShaking(true); // Começa a tremer
+        setIsShaking(true);
         playSound('fail');
-        
-        // Aguarda animação terminar (500ms)
         setTimeout(() => {
             setIsShaking(false);
-            setInventory([{ 
-                id: `trash-${Date.now()}`, 
-                icon: '🤢', 
-                name: 'Gororoba', 
-                rarity: 'common' 
-            }]);
+            setInventory([{ id: `trash-${Date.now()}`, icon: '🤢', name: 'Gororoba', rarity: 'common' }]);
             setCraftResult(null);
         }, 500);
     }
@@ -142,7 +174,6 @@ export default function Home() {
     alert('Copiado para a área de transferência!');
   };
 
-  // --- PALETA DE CORES DINÂMICA ---
   const theme = isNight ? {
     bg: 'bg-rpg-bg',
     card: 'bg-slate-800/50',
@@ -152,7 +183,7 @@ export default function Home() {
     pantryBg: 'bg-slate-900',
     gradient: 'from-rpg-accent to-blue-500'
   } : {
-    bg: 'bg-orange-50', // Dia: Fundo claro quente
+    bg: 'bg-orange-50',
     card: 'bg-white/60',
     accent: 'text-orange-600',
     border: 'border-orange-200',
@@ -164,10 +195,8 @@ export default function Home() {
   return (
     <main className={`min-h-screen ${theme.bg} transition-colors duration-1000 text-slate-800 dark:text-white selection:bg-rpg-accent selection:text-white py-12 px-4 relative overflow-x-hidden`}>
       
-      {/* Background Decoration */}
       <div className={`fixed top-0 left-0 w-full h-1 bg-gradient-to-r ${theme.gradient} shadow-[0_0_40px_rgba(139,92,246,0.6)] z-50`}></div>
       
-      {/* Botão de Toggle Manual (Debug/Diversão) */}
       <button 
         onClick={() => setIsNight(!isNight)}
         className="fixed top-4 right-4 z-50 p-2 rounded-full bg-slate-800/20 backdrop-blur-md hover:bg-slate-800/40 transition-all border border-slate-500/20"
@@ -175,19 +204,16 @@ export default function Home() {
         {isNight ? <Moon size={20} className="text-purple-300" /> : <Sun size={20} className="text-orange-500" />}
       </button>
 
-      {/* CONTAINER CENTRALIZADO */}
       <div className="max-w-2xl mx-auto flex flex-col gap-12">
 
-        {/* --- BLOCO 1: HEADER & STATS --- */}
+        {/* HEADER */}
         <section className="text-center space-y-6">
           <div className="inline-block relative">
             <h1 className={`text-4xl md:text-5xl font-black tracking-tight flex items-center justify-center gap-3 drop-shadow-xl ${isNight ? 'text-white' : 'text-slate-800'}`}>
               <ChefHat size={48} className={`${theme.accent} animate-bounce-slow`} /> 
               Inventory Cook
             </h1>
-            <span className="absolute -top-2 -right-6 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full rotate-12">
-              BETA
-            </span>
+            <span className="absolute -top-2 -right-6 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full rotate-12">BETA</span>
           </div>
           
           <div className={`${theme.card} backdrop-blur-md p-4 rounded-2xl border ${theme.border} shadow-lg max-w-md mx-auto transition-colors duration-500`}>
@@ -204,8 +230,6 @@ export default function Home() {
                 <span className={`text-[10px] block -mt-1 font-bold ${isNight ? 'text-slate-500' : 'text-slate-400'}`}>XP TOTAL</span>
               </div>
             </div>
-            
-            {/* Barra de XP */}
             <div className={`w-full h-4 rounded-full overflow-hidden border ${theme.border} relative ${isNight ? 'bg-slate-900' : 'bg-slate-200'}`}>
               <motion.div 
                 className={`h-full bg-gradient-to-r ${theme.gradient} relative`}
@@ -219,13 +243,24 @@ export default function Home() {
           </div>
         </section>
 
-        {/* --- BLOCO 2: O CALDEIRÃO --- */}
+        {/* CALDEIRÃO */}
         <section className="relative z-10">
-          <div className="text-center mb-4">
-             <h2 className={`text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${isNight ? 'text-slate-400' : 'text-slate-500'}`}>
-               <Sparkles size={14} /> Área de Preparo
-             </h2>
-          </div>
+          
+          {/* DICA DE CHEIRO (NOVO) */}
+          <AnimatePresence>
+            {hintMessage && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0 }}
+                className="absolute -top-12 left-0 right-0 flex justify-center pointer-events-none"
+              >
+                <div className={`${isNight ? 'bg-slate-800 text-purple-200' : 'bg-white text-orange-600'} px-6 py-2 rounded-full text-sm font-bold shadow-lg border border-slate-500/20 flex items-center gap-2`}>
+                  <Search size={14} /> {hintMessage}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div 
             className={`
@@ -236,7 +271,6 @@ export default function Home() {
             onDrop={handleDropOnInventory}
             onDragOver={allowDrop}
           >
-            {/* Placeholder */}
             <AnimatePresence>
               {inventory.length === 0 && (
                 <motion.div 
@@ -249,20 +283,17 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {/* Itens no Caldeirão */}
             <AnimatePresence mode='popLayout'>
               {inventory.map((item) => (
                 <motion.div 
                   key={`${item.id}`}
                   layoutId={item.id}
-                  // Animação de Shake se estiver errado
                   animate={isShaking ? { x: [-5, 5, -5, 5, 0], rotate: [0, -10, 10, -5, 5, 0] } : { scale: 1, rotate: Math.random() * 10 - 5 }}
                   transition={isShaking ? { duration: 0.4 } : { type: "spring" }}
-                  
                   initial={{ scale: 0, rotate: Math.random() * 360 }}
                   exit={{ scale: 0, opacity: 0 }}
                   whileHover={{ scale: 1.2, rotate: 0, zIndex: 20 }}
-                  draggable={true}
+                  draggable={true} // Correção do bug anterior aplicada
                   onDragStart={(e) => handleDragStart(e, item, 'inventory')}
                   className={`w-20 h-20 ${theme.itemBg} backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-xl border border-slate-500/20 cursor-grab active:cursor-grabbing`}
                 >
@@ -271,7 +302,6 @@ export default function Home() {
               ))}
             </AnimatePresence>
 
-            {/* BOTÃO DE AÇÃO (MISTURAR OU CRAFTAR) */}
             <AnimatePresence>
               {inventory.length > 0 && (
                 <motion.div className="absolute -bottom-6 left-0 right-0 flex justify-center z-30">
@@ -291,15 +321,9 @@ export default function Home() {
                     `}
                   >
                     {craftResult ? (
-                        <>
-                            <Sparkles size={24} className="animate-spin-slow" /> 
-                            CRAFTAR!
-                        </>
+                        <> <Sparkles size={24} className="animate-spin-slow" /> CRAFTAR! </>
                     ) : (
-                        <>
-                            <RotateCw size={24} className={isShaking ? "animate-spin" : ""} /> 
-                            MISTURAR
-                        </>
+                        <> <RotateCw size={24} className={isShaking ? "animate-spin" : ""} /> MISTURAR </>
                     )}
                   </motion.button>
                 </motion.div>
@@ -307,7 +331,6 @@ export default function Home() {
             </AnimatePresence>
           </div>
 
-          {/* Botão Limpar */}
           <div className="flex justify-center mt-10 min-h-[40px]">
             {inventory.length > 0 && (
               <motion.button 
@@ -321,9 +344,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* --- BLOCO 3: A GELADEIRA (GRID) --- */}
+        {/* DESPENSA COM SINERGIA */}
         <section className={`${theme.pantryBg} rounded-[2.5rem] p-8 border ${theme.border} shadow-2xl relative transition-colors duration-500`}>
-          {/* Label da Geladeira */}
           <div className={`absolute -top-4 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full border shadow-lg flex items-center gap-2 ${isNight ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-orange-100 text-slate-600'}`}>
              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
              <span className="text-xs font-bold uppercase tracking-widest">Despensa</span>
@@ -334,42 +356,51 @@ export default function Home() {
             onDrop={handleDropOnPantry}
             onDragOver={allowDrop}
           >
-            {pantry.map((item) => (
-              <motion.div
-                key={item.id}
-                draggable
-                layoutId={`store-${item.id}`}
-                whileHover={{ scale: 1.05, y: -5 }}
-                whileTap={{ scale: 0.95 }}
-                onDragStart={(e) => handleDragStart(e, item, 'pantry')}
-                className={`
-                  aspect-square rounded-2xl flex flex-col items-center justify-center gap-2 cursor-grab active:cursor-grabbing
-                  border-2 transition-all group
-                  ${isNight 
-                    ? 'bg-slate-800 border-slate-700/50 hover:bg-slate-700 hover:border-slate-500' 
-                    : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-orange-300'
-                  }
-                  ${item.rarity === 'rare' ? 'border-purple-500/30 bg-purple-900/10' : ''}
-                  ${item.rarity === 'legendary' ? 'border-yellow-500/30 bg-yellow-900/10' : ''}
-                `}
-              >
-                <span className="text-3xl sm:text-4xl drop-shadow-md filter grayscale-[0.2] group-hover:grayscale-0 transition-all duration-300">
-                  {item.icon}
-                </span>
-                <span className={`text-[10px] sm:text-xs font-bold uppercase text-center tracking-tight leading-none ${
-                   isNight 
-                   ? (item.rarity === 'legendary' ? 'text-yellow-500' : item.rarity === 'rare' ? 'text-purple-400' : 'text-slate-500 group-hover:text-slate-300')
-                   : (item.rarity === 'legendary' ? 'text-yellow-600' : item.rarity === 'rare' ? 'text-purple-600' : 'text-slate-400 group-hover:text-slate-600')
-                }`}>
-                  {item.name}
-                </span>
-              </motion.div>
-            ))}
+            {pantry.map((item) => {
+              // Lógica de Visualização (Sinergia)
+              const isCompatible = inventory.length === 0 || compatibleIngredients.includes(item.id);
+              const isDimmed = !isCompatible && inventory.length > 0;
+
+              return (
+                <motion.div
+                  key={item.id}
+                  draggable
+                  layoutId={`store-${item.id}`}
+                  animate={isCompatible && inventory.length > 0 ? { scale: [1, 1.05, 1], transition: { repeat: Infinity, duration: 2 } } : {}}
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  whileTap={{ scale: 0.95 }}
+                  onDragStart={(e) => handleDragStart(e, item, 'pantry')}
+                  className={`
+                    aspect-square rounded-2xl flex flex-col items-center justify-center gap-2 cursor-grab active:cursor-grabbing
+                    border-2 transition-all duration-500 group
+                    ${isDimmed ? 'opacity-30 grayscale scale-95' : 'opacity-100'}
+                    ${isCompatible && inventory.length > 0 ? 'ring-2 ring-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]' : ''}
+                    ${isNight 
+                      ? 'bg-slate-800 border-slate-700/50 hover:bg-slate-700' 
+                      : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-orange-300'
+                    }
+                    ${item.rarity === 'rare' ? 'border-purple-500/30 bg-purple-900/10' : ''}
+                    ${item.rarity === 'legendary' ? 'border-yellow-500/30 bg-yellow-900/10' : ''}
+                  `}
+                >
+                  <span className="text-3xl sm:text-4xl drop-shadow-md filter grayscale-[0.2] group-hover:grayscale-0 transition-all duration-300">
+                    {item.icon}
+                  </span>
+                  <span className={`text-[10px] sm:text-xs font-bold uppercase text-center tracking-tight leading-none ${
+                    isNight 
+                    ? 'text-slate-500 group-hover:text-slate-300'
+                    : 'text-slate-400 group-hover:text-slate-600'
+                  }`}>
+                    {item.name}
+                  </span>
+                </motion.div>
+              );
+            })}
           </div>
         </section>
       </div>
 
-      {/* --- MODAL (MANTIDO) --- */}
+      {/* MODAL MANTIDO (Código igual ao anterior, omitido para economizar espaço, mas deve estar aqui) */}
       <AnimatePresence>
         {selectedRecipe && (
           <motion.div 
