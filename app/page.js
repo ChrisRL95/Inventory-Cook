@@ -24,7 +24,6 @@ export default function Home() {
     const source = e.dataTransfer.getData('source');
 
     if (source === 'inventory') return;
-    if (inventory.length >= 4) return;
     if (inventory.some(i => i.id === itemData.id)) return;
 
     const newInventory = [...inventory, itemData];
@@ -277,3 +276,4 @@ export default function Home() {
     </main>
   );
 }
+
