@@ -63,10 +63,12 @@ export default function Home() {
     e.preventDefault();
     const source = e.dataTransfer.getData('source');
     
+    // Lógica para remover do inventário ao arrastar de volta para a loja
     if (source === 'inventory') {
       const itemData = JSON.parse(e.dataTransfer.getData('item'));
       const indexToRemove = inventory.findIndex(i => i.id === itemData.id);
       if (indexToRemove > -1) {
+        playSound('pop'); // Feedback sonoro ao remover
         const newInventory = [...inventory];
         newInventory.splice(indexToRemove, 1);
         setInventory(newInventory);
@@ -195,10 +197,10 @@ export default function Home() {
                   animate={{ scale: 1, rotate: Math.random() * 10 - 5 }}
                   exit={{ scale: 0, opacity: 0 }}
                   whileHover={{ scale: 1.2, rotate: 0, zIndex: 20 }}
-                  drag
-                  dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                  // CORREÇÃO: Removemos 'drag' e 'dragConstraints' do Framer para evitar conflito
+                  draggable={true} // Forçamos o HTML5 Drag
                   onDragStart={(e) => handleDragStart(e, item, 'inventory')}
-                  className="w-20 h-20 bg-slate-700/90 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-2xl border border-slate-500/50 cursor-grab active:cursor-grabbing"
+                  className="w-20 h-20 bg-slate-700/90 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-2xl border border-slate-500/50 cursor-grab active:cursor-grabbing hover:border-white/50 transition-colors"
                 >
                   {item.icon}
                 </motion.div>
