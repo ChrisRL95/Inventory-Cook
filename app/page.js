@@ -13,13 +13,17 @@ export default function Home() {
   const [xp, setXp] = useState(0);
   const [unlockedRecipes, setUnlockedRecipes] = useState([]);
   
-  // Estados Visuais
+  // Estados Visuais & Mecânicas
   const [isNight, setIsNight] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [isBookOpen, setIsBookOpen] = useState(false);
   const [isAutoFilled, setIsAutoFilled] = useState(false);
   
-  // Estados de Sinergia
+  // Estados do Gregório (O Livro)
+  const [activeTab, setActiveTab] = useState('cafe');
+  const [gregorioQuote, setGregorioQuote] = useState('');
+  
+  // Sinergia
   const [compatibleIngredients, setCompatibleIngredients] = useState([]);
   const [hintMessage, setHintMessage] = useState('');
 
@@ -30,12 +34,33 @@ export default function Home() {
       craft: '/sounds/craft.mp3',
       trash: '/sounds/trash.mp3',
       fail: '/sounds/trash.mp3',
-      page: '/sounds/pop.mp3',
+      page: '/sounds/pop.mp3', // Som de virar página
     };
     const audio = new Audio(sounds[type]);
     audio.volume = 0.5;
     audio.play().catch(() => {});
   };
+
+  // --- FRASES DO GREGÓRIO ---
+  const gregorioQuotes = [
+    "O Gregório recomenda: não queime o alho.",
+    "Se cair no chão, a regra dos 5 segundos vale.",
+    "Tempero Mágico não conserta relacionamento, mas conserta sopa.",
+    "Cozinhar é como programar, mas se der erro você come mesmo assim.",
+    "Cuidado com o forno, ele morde.",
+    "Um chef sem faca é como um dev sem internet.",
+    "Receitas lendárias exigem paciência lendária.",
+    "O segredo é sempre mais manteiga."
+  ];
+
+  useEffect(() => {
+    if (isBookOpen) {
+      // Escolhe uma frase aleatória ao abrir o livro
+      const randomQuote = gregorioQuotes[Math.floor(Math.random() * gregorioQuotes.length)];
+      setGregorioQuote(randomQuote);
+      playSound('page');
+    }
+  }, [isBookOpen]);
 
   // --- STARTUP ---
   useEffect(() => {
@@ -178,20 +203,24 @@ export default function Home() {
     alert('Copiado!');
   };
 
-  // --- PALETA DE CORES (VIBE: FOGO & PEDRA vs FARINHA & MANJERICÃO) ---
+  // --- TEMA ---
   const theme = isNight ? {
-    // MODO ESCURO: Stone + Amber (Taverna)
-    bg: 'bg-[#0c0a09]', // Stone 950 customizado
+    bg: 'bg-[#0c0a09]',
     text: 'text-stone-200',
-    card: 'bg-[#1c1917]/80', // Stone 900
-    accent: 'text-amber-500', // Dourado
+    card: 'bg-[#1c1917]/80',
+    accent: 'text-amber-500',
     border: 'border-stone-700/50',
-    itemBg: 'bg-[#292524]', // Stone 800
-    pantryBg: 'bg-[#1c1917]', // Stone 900
-    gradient: 'from-amber-600 to-orange-600', // Fogo
-    hintBg: 'bg-stone-800 text-amber-200 border-stone-700'
+    itemBg: 'bg-[#292524]',
+    pantryBg: 'bg-[#1c1917]',
+    gradient: 'from-amber-600 to-orange-600',
+    hintBg: 'bg-stone-800 text-amber-200 border-stone-700',
+    // Estilo do Livro (Escuro)
+    bookBg: 'bg-[#2c241b]', // Couro escuro
+    bookText: 'text-[#e7d5c0]',
+    bookBorder: 'border-[#4a3b2a]',
+    tabActive: 'bg-[#4a3b2a] text-amber-500',
+    tabInactive: 'bg-[#1c1917] text-stone-500'
   } : {
-    // MODO CLARO: Orange-50 + Orange-600 (Confeitaria)
     bg: 'bg-orange-50',
     text: 'text-orange-950',
     card: 'bg-white/80',
@@ -200,13 +229,26 @@ export default function Home() {
     itemBg: 'bg-white',
     pantryBg: 'bg-white',
     gradient: 'from-orange-400 to-yellow-400',
-    hintBg: 'bg-white text-orange-600 border-orange-200'
+    hintBg: 'bg-white text-orange-600 border-orange-200',
+    // Estilo do Livro (Claro)
+    bookBg: 'bg-[#fdf6e3]', // Pergaminho claro (Solarized)
+    bookText: 'text-[#5c4b37]', // Tinta marrom
+    bookBorder: 'border-[#e0d6c2]',
+    tabActive: 'bg-[#ebdcb2] text-orange-800 border-[#d3c295]',
+    tabInactive: 'bg-[#f0eadd] text-[#a09585]'
   };
+
+  // Categorias para as abas
+  const tabs = [
+    { id: 'cafe', icon: '🥐', label: 'Matinais' },
+    { id: 'refeicao', icon: '🥘', label: 'Refeições' },
+    { id: 'doce', icon: '🍰', label: 'Doceria' },
+    { id: 'legendario', icon: '✨', label: 'Lendários' },
+  ];
 
   return (
     <main className={`min-h-screen ${theme.bg} ${theme.text} transition-colors duration-1000 font-sans selection:bg-orange-500 selection:text-white py-12 px-4 relative overflow-x-hidden`}>
       
-      {/* Luz Ambiente (Glow no Topo) */}
       <div className={`fixed top-0 left-0 w-full h-1 bg-gradient-to-r ${theme.gradient} shadow-[0_0_60px_rgba(245,158,11,0.4)] z-50`}></div>
       
       {/* Controles */}
@@ -214,7 +256,7 @@ export default function Home() {
         <button 
             onClick={() => setIsBookOpen(true)}
             className={`p-2 rounded-full backdrop-blur-md transition-all border ${theme.border} ${isNight ? 'bg-stone-800/50 hover:bg-stone-700 text-amber-400' : 'bg-white/50 hover:bg-white text-orange-500'}`}
-            title="Abrir Livro de Receitas"
+            title="Abrir O Gregório"
         >
             <Book size={20} />
         </button>
@@ -298,7 +340,7 @@ export default function Home() {
                   className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
                 >
                   <ChefHat size={64} className="mb-2" />
-                  <span className="text-sm font-bold uppercase tracking-widest">Arraste ou use o Livro</span>
+                  <span className="text-sm font-bold uppercase tracking-widest">Arraste ou use o Gregório 📖</span>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -417,7 +459,7 @@ export default function Home() {
         </section>
       </div>
 
-      {/* MODAL DO LIVRO */}
+      {/* --- O GREGÓRIO (GRIMÓRIO) --- */}
       <AnimatePresence>
         {isBookOpen && (
           <motion.div 
@@ -426,47 +468,91 @@ export default function Home() {
             onClick={() => setIsBookOpen(false)}
           >
             <motion.div 
-              initial={{ scale: 0.9, y: 50, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 50, opacity: 0 }}
-              className={`w-full max-w-lg rounded-3xl p-6 relative shadow-2xl max-h-[80vh] flex flex-col ${isNight ? 'bg-stone-900 border border-stone-700' : 'bg-orange-50 border border-orange-200'}`}
+              initial={{ scale: 0.9, y: 50, opacity: 0, rotateX: 10 }} 
+              animate={{ scale: 1, y: 0, opacity: 1, rotateX: 0 }} 
+              exit={{ scale: 0.9, y: 50, opacity: 0 }}
+              className={`w-full max-w-2xl h-[85vh] rounded-r-2xl rounded-l-md flex flex-col relative shadow-2xl overflow-hidden border-4 ${theme.bookBg} ${theme.bookText} ${theme.bookBorder}`}
               onClick={e => e.stopPropagation()}
             >
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className={`text-2xl font-black ${isNight ? 'text-stone-200' : 'text-orange-900'}`}>Grimório</h2>
-                    <button onClick={() => setIsBookOpen(false)} className="p-2 rounded-full hover:bg-black/10"><X size={20} /></button>
+                {/* Lateral do Livro (Binding) */}
+                <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-black/20 to-transparent pointer-events-none z-10"></div>
+
+                {/* Cabeçalho */}
+                <div className="p-6 border-b border-black/10 flex justify-between items-center bg-black/5">
+                    <div>
+                        <h2 className="text-3xl font-black font-serif italic tracking-wide">O Gregório</h2>
+                        <p className="text-xs opacity-60 font-mono mt-1">Grimório de Receitas v3.2</p>
+                    </div>
+                    <button onClick={() => setIsBookOpen(false)} className="p-2 rounded-full hover:bg-black/10 transition-colors">
+                        <X size={24} />
+                    </button>
                 </div>
 
-                <div className="overflow-y-auto pr-2 space-y-3 custom-scrollbar flex-1">
-                    {receitas.map((recipe, idx) => (
-                        <motion.div 
-                            key={idx}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleAutoFill(recipe)}
-                            className={`p-4 rounded-xl cursor-pointer flex justify-between items-center transition-all ${
-                                isNight 
-                                ? 'bg-stone-800 hover:bg-stone-700 border border-stone-700' 
-                                : 'bg-white hover:bg-orange-100 border border-orange-100'
+                {/* Abas de Navegação */}
+                <div className="flex px-6 pt-4 gap-2 overflow-x-auto scrollbar-hide">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-4 py-2 rounded-t-lg font-bold text-sm transition-all border-t border-x border-black/5 flex items-center gap-2 ${
+                                activeTab === tab.id ? theme.tabActive : theme.tabInactive
                             }`}
                         >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl">📜</span>
+                            <span className="text-lg">{tab.icon}</span> {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Conteúdo da Lista */}
+                <div className={`flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar bg-black/5`}>
+                    {receitas
+                        .filter(r => r.category === activeTab)
+                        .map((recipe, idx) => (
+                        <motion.div 
+                            key={idx}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            whileHover={{ scale: 1.01, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                            whileTap={{ scale: 0.99 }}
+                            onClick={() => handleAutoFill(recipe)}
+                            className={`p-4 rounded-xl cursor-pointer flex justify-between items-center transition-all border border-black/5 ${isNight ? 'hover:border-amber-900' : 'hover:border-orange-200'}`}
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-black/10 flex items-center justify-center text-xl">
+                                    📜
+                                </div>
                                 <div>
-                                    <h3 className={`font-bold ${isNight ? 'text-stone-200' : 'text-orange-900'}`}>{recipe.name}</h3>
-                                    <p className={`text-xs opacity-60`}>{recipe.ingredients.length} Ingredientes • {recipe.time}</p>
+                                    <h3 className="font-bold text-lg leading-tight">{recipe.name}</h3>
+                                    <p className="text-xs opacity-60 font-mono mt-1">
+                                        {recipe.ingredients.length} Itens • {recipe.time}
+                                    </p>
                                 </div>
                             </div>
-                            <span className="text-xs font-bold px-2 py-1 rounded bg-black/10 opacity-60">
+                            <span className="text-xs font-bold px-3 py-1 rounded-full bg-black/10 opacity-70">
                                 {Math.floor(recipe.xp / 2)} XP
                             </span>
                         </motion.div>
                     ))}
+                    
+                    {receitas.filter(r => r.category === activeTab).length === 0 && (
+                        <div className="text-center py-10 opacity-40 italic">
+                            Nenhuma receita encontrada nesta página...
+                        </div>
+                    )}
                 </div>
+
+                {/* Rodapé do Gregório (Quotes) */}
+                <div className="p-4 border-t border-black/10 bg-black/5 text-center">
+                    <p className="text-sm italic font-serif opacity-70">"{gregorioQuote}"</p>
+                </div>
+
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* MODAL DE SUCESSO */}
+      {/* MODAL DE SUCESSO (Visual Atualizado) */}
       <AnimatePresence>
         {selectedRecipe && (
           <motion.div 
