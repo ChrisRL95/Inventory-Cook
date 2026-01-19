@@ -7,10 +7,10 @@ module.exports = {
     extend: {
       colors: {
         rpg: {
-          bg: '#0f172a',    // Fundo escuro (Slate 900)
-          slot: '#1e293b',  // Slot vazio (Slate 800)
-          accent: '#8b5cf6', // Roxo mágico
-          success: '#22c55e' // Verde sucesso
+          bg: '#0c0a09',    // Stone 950 (Fundo "Pedra de Forno")
+          slot: '#1c1917',  // Stone 900 (Slot escuro)
+          accent: '#f59e0b', // Amber 500 (Dourado/Fogo/Mel)
+          success: '#22c55e' // Verde sucesso (Mitoque)
         }
       }
     },
